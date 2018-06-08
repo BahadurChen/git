@@ -2,6 +2,8 @@
 #include "win32.h"
 #include <conio.h>
 #include <wchar.h>
+#include <aclapi.h>
+#include <sddl.h>
 #include "../strbuf.h"
 #include "../run-command.h"
 #include "../cache.h"
@@ -2570,4 +2572,129 @@ int uname(struct utsname *buf)
 	xsnprintf(buf->version, sizeof(buf->version),
 		  "%u", (v >> 16) & 0x7fff);
 	return 0;
+}
+
+/*
+ * Determines whether the SID refers to an administrator or the current user.
+ *
+ * For convenience, the `info` parameter allows avoiding multiple calls to
+ * `OpenProcessToken()` if this function is called more than once. The initial
+ * value of `*info` is expected to be `NULL`, and it needs to be released via
+ * `free()` after the last call to this function.
+ *
+ * Returns 0 if the SID indicates a dubious owner of system files, otherwise 1.
+ */
+static int is_valid_system_file_owner(PSID sid, TOKEN_USER **info)
+{
+	HANDLE token;
+	DWORD len;
+
+	if (IsWellKnownSid(sid, WinBuiltinAdministratorsSid) ||
+	    IsWellKnownSid(sid, WinLocalSystemSid))
+		return 1;
+
+	/* Obtain current user's SID */
+	if (!*info &&
+	    OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
+		if (!GetTokenInformation(token, TokenUser, NULL, 0, &len)) {
+			*info = xmalloc((size_t)len);
+			if (!GetTokenInformation(token, TokenUser, *info, len,
+						 &len))
+				FREE_AND_NULL(*info);
+		}
+		CloseHandle(token);
+	}
+
+	return *info && EqualSid(sid, (*info)->User.Sid) ? 1 : 0;
+}
+
+/*
+ * Verify that the file in question is owned by an administrator or system
+ * account, or at least by the current user.
+ *
+ * This function returns 1 if successful, 0 if the file is not owned by any of
+ * these, or -1 on error.
+ */
+static int validate_system_file_ownership(const char *path)
+{
+	WCHAR wpath[MAX_PATH];
+	PSID owner_sid = NULL, problem_sid = NULL;
+	PSECURITY_DESCRIPTOR descriptor = NULL;
+	TOKEN_USER* info = NULL;
+	DWORD err;
+	int ret;
+
+	if (xutftowcs_path(wpath, path) < 0)
+		return -1;
+
+	err = GetNamedSecurityInfoW(wpath, SE_FILE_OBJECT,
+				    OWNER_SECURITY_INFORMATION |
+				    DACL_SECURITY_INFORMATION,
+				    &owner_sid, NULL, NULL, NULL, &descriptor);
+
+	/* if the file does not exist, it does not have a valid owner */
+	if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
+		ret = 0;
+	else if (err != ERROR_SUCCESS)
+		ret = error(_("failed to validate '%s' (%ld)"), path, err);
+	else if (!IsValidSid(owner_sid))
+		ret = error(_("invalid owner: '%s'"), path);
+	else if (is_valid_system_file_owner(owner_sid, &info))
+		ret = 1;
+	else {
+		ret = 0;
+		problem_sid = owner_sid;
+	}
+
+	if (!ret && problem_sid) {
+#define MAX_NAME_OR_DOMAIN 256
+		wchar_t name[MAX_NAME_OR_DOMAIN];
+		wchar_t domain[MAX_NAME_OR_DOMAIN];
+		wchar_t *p = NULL;
+		DWORD size = MAX_NAME_OR_DOMAIN;
+		SID_NAME_USE type;
+		char utf[3 * MAX_NAME_OR_DOMAIN + 1];
+
+		if (!LookupAccountSidW(NULL, problem_sid, name, &size,
+				       domain, &size, &type) ||
+		    xwcstoutf(utf, name, ARRAY_SIZE(utf)) < 0) {
+			if (!ConvertSidToStringSidW(problem_sid, &p))
+				strlcpy(utf, "(unknown)", ARRAY_SIZE(utf));
+			else {
+				if (xwcstoutf(utf, p, ARRAY_SIZE(utf)) < 0)
+					strlcpy(utf, "(some user)",
+						ARRAY_SIZE(utf));
+				LocalFree(p);
+			}
+		}
+
+		warning(_("'%s' has a dubious owner: '%s'.\n"
+			  "For security reasons, it is therefore ignored.\n"
+			  "To fix this, please transfer ownership to an "
+			  "admininstrator."),
+			path, utf);
+	}
+
+	if (descriptor)
+		LocalFree(descriptor);
+	free(info);
+
+	return ret;
+}
+
+const char *program_data_config(void)
+{
+	static struct strbuf path = STRBUF_INIT;
+	static unsigned initialized;
+
+	if (!initialized) {
+		const char *env = mingw_getenv("PROGRAMDATA");
+		if (env) {
+			strbuf_addf(&path, "%s/Git/config", env);
+			if (validate_system_file_ownership(path.buf) != 1)
+				strbuf_setlen(&path, 0);
+		}
+		initialized = 1;
+	}
+	return *path.buf ? path.buf : NULL;
 }
