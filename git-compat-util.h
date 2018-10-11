@@ -405,6 +405,10 @@ static inline char *git_find_last_dir_sep(const char *path)
 #define find_last_dir_sep git_find_last_dir_sep
 #endif
 
+#ifndef is_mount_point
+#define is_mount_point is_mount_point_via_stat
+#endif
+
 #ifndef query_user_email
 #define query_user_email() NULL
 #endif
@@ -420,6 +424,10 @@ static inline char *git_find_last_dir_sep(const char *path)
  */
 # define NSIG 100
 #endif
+#endif
+
+#ifndef git_program_data_config
+#define git_program_data_config() NULL
 #endif
 
 #if defined(__HP_cc) && (__HP_cc >= 61000)
