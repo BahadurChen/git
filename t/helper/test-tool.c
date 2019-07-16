@@ -41,6 +41,7 @@ static struct test_cmd cmds[] = {
 	{ "parse-options", cmd__parse_options },
 	{ "path-utils", cmd__path_utils },
 	{ "pkt-line", cmd__pkt_line },
+	{ "prefix-map", cmd__prefix_map },
 	{ "prio-queue", cmd__prio_queue },
 	{ "progress", cmd__progress },
 	{ "reach", cmd__reach },
