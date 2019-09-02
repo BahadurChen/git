@@ -423,6 +423,7 @@ ifeq ($(uname_S),Windows)
 	ETAGS_TARGET = ETAGS
 	NO_POSIX_GOODIES = UnfortunatelyYes
 	NATIVE_CRLF = YesPlease
+	INTERNAL_QSORT = YesPlease
 	DEFAULT_HELP_FORMAT = html
 
 	CC = compat/vcbuild/scripts/clink.pl
