@@ -180,11 +180,9 @@ void grep_init(struct grep_opt *opt, struct repository *repo, const char *prefix
 					pcre2_malloc, pcre2_free, NULL);
 #endif
 
-#ifdef USE_NED_ALLOCATOR
 #ifdef USE_LIBPCRE1
 	pcre_malloc = malloc;
 	pcre_free = free;
-#endif
 #endif
 
 	memset(opt, 0, sizeof(*opt));
