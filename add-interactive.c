@@ -1050,7 +1050,9 @@ int run_add_i(struct repository *r, const struct pathspec *ps)
 		    _("staged"), _("unstaged"), _("path"));
 	opts.list_opts.header = header.buf;
 
-	repo_refresh_and_write_index(r, REFRESH_QUIET, 1);
+	if (repo_read_index_preload(r, NULL, 0) < 0)
+		return error(_("could not read index"));
+	repo_refresh_and_write_index(r, REFRESH_QUIET, 0, 1, NULL, NULL, NULL);
 	if (run_status(&s, ps, &files, &opts) < 0)
 		res = -1;
 
