@@ -736,7 +736,7 @@ static int get_untracked_files(struct repository *r, struct file_list *list,
 		return error(_("could not read index"));
 
 	setup_standard_excludes(&dir);
-	add_exclude_list(&dir, EXC_CMDL, "--exclude option");
+	add_pattern_list(&dir, EXC_CMDL, "--exclude option");
 	fill_directory(&dir, r->index, ps);
 
 	for (i = 0; i < dir.nr; i++) {
