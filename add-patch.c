@@ -1551,7 +1551,11 @@ soft_increment:
 					 NULL, 0, NULL, 0))
 				error(_("'git apply' failed"));
 		}
-		repo_refresh_and_write_index(s->s.r, REFRESH_QUIET, 0);
+		if (discard_index(s->s.r->index) < 0 ||
+		    repo_read_index_preload(s->s.r, NULL, 0) < 0)
+			return error(_("could not read index"));
+		repo_refresh_and_write_index(s->s.r, REFRESH_QUIET, 0, 1,
+					     NULL, NULL, NULL);
 	}
 
 	putchar('\n');
@@ -1594,7 +1598,10 @@ int run_add_p(struct repository *r, enum add_p_mode mode,
 		s.mode = &patch_mode_stage;
 	s.revision = revision;
 
-	if (repo_refresh_and_write_index(r, REFRESH_QUIET, 0) < 0 ||
+	if (repo_read_index_preload(r, NULL, 0) < 0)
+		return error(_("could not read index"));
+	if (repo_refresh_and_write_index(r, REFRESH_QUIET, 0, 1,
+					 NULL, NULL, NULL) < 0 ||
 	    parse_diff(&s, ps) < 0) {
 		strbuf_release(&s.plain);
 		strbuf_release(&s.colored);
