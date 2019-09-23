@@ -715,7 +715,8 @@ static int run_revert(struct add_i_state *s, const struct pathspec *ps,
 				       COMMIT_LOCK) < 0)
 		res = -1;
 	else
-		res = repo_refresh_and_write_index(s->r, REFRESH_QUIET, 0, NULL, NULL, NULL);
+		res = repo_refresh_and_write_index(s->r, REFRESH_QUIET, 0, 1,
+						   NULL, NULL, NULL);
 	if (!res)
 		printf(Q_("reverted %d path\n",
 			  "reverted %d paths\n", count), (int)count);
