@@ -322,10 +322,14 @@ struct pathname_entry {
 };
 
 static int pathname_entry_cmp(const void *unused_cmp_data,
-			      const void *entry, const void *entry_or_key,
+			      const struct hashmap_entry *he1,
+			      const struct hashmap_entry *he2,
 			      const void *pathname)
 {
-	const struct pathname_entry *e1 = entry, *e2 = entry_or_key;
+	const struct pathname_entry *e1 =
+		container_of(he1, const struct pathname_entry, ent);
+	const struct pathname_entry *e2 =
+		container_of(he2, const struct pathname_entry, ent);
 
 	return strcmp(e1->pathname,
 		      pathname ? (const char *)pathname : e2->pathname);
@@ -363,7 +367,8 @@ static void collect_changes_cb(struct diff_queue_struct *q,
 		struct file_item *file;
 		struct adddel *adddel, *other_adddel;
 
-		entry = hashmap_get_from_hash(&s->file_map, hash, name);
+		entry = hashmap_get_entry_from_hash(&s->file_map, hash, name,
+						    struct pathname_entry, ent);
 		if (entry) {
 			if (entry->index == (size_t)-1)
 				continue;
@@ -372,9 +377,9 @@ static void collect_changes_cb(struct diff_queue_struct *q,
 			continue;
 		else {
 			FLEX_ALLOC_STR(entry, pathname, name);
-			hashmap_entry_init(entry, hash);
+			hashmap_entry_init(&entry->ent, hash);
 			entry->index = file_index = s->list->nr;
-			hashmap_add(&s->file_map, entry);
+			hashmap_add(&s->file_map, &entry->ent);
 
 			add_file_item(s->list, name);
 		}
@@ -453,7 +458,7 @@ static int get_modified_files(struct repository *r,
 			run_diff_files(&rev, 0);
 		}
 	}
-	hashmap_free(&s.file_map, 1);
+	hashmap_free_entries(&s.file_map, struct pathname_entry, ent);
 	if (unmerged_count)
 		*unmerged_count = s.unmerged_count;
 	if (binary_count)
